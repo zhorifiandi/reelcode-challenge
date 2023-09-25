@@ -2,6 +2,7 @@ package ratelimiter
 
 import (
 	"errors"
+	"log"
 	"sync"
 )
 
@@ -35,12 +36,12 @@ func (rl *tokenBucketRateLimiter) incrementCounter(key string) error {
 	rl.lock.Lock()
 	defer rl.lock.Unlock()
 
-	_, ok := rl.RequestCounters[key]
+	counter, ok := rl.RequestCounters[key]
 	if !ok {
 		rl.RequestCounters[key] = 0
 	}
 
-	// log.Printf("incrementing counter from %d to %d\n", counter, counter+1)
+	log.Printf("incrementing counter from %d to %d\n", counter, counter+1)
 	rl.RequestCounters[key]++
 
 	return nil
@@ -59,12 +60,12 @@ func (rl *tokenBucketRateLimiter) Release(key string) error {
 	rl.lock.Lock()
 	defer rl.lock.Unlock()
 
-	_, ok := rl.RequestCounters[key]
+	counter, ok := rl.RequestCounters[key]
 	if !ok {
 		return errors.New("key not found")
 	}
 
-	// log.Printf("decrementing counter from %d to %d\n", counter, counter-1)
+	log.Printf("decrementing counter from %d to %d\n", counter, counter-1)
 	rl.RequestCounters[key]--
 
 	return nil
