@@ -5,17 +5,22 @@ import (
 	"log"
 	"net/http"
 	"ratelimiter"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const SAMPLE_WEB_SERVER_PORT = 9990
 
-func sampleWebServer(rl ratelimiter.RateLimiter) error {
+func sampleWebServer(
+	rl ratelimiter.RateLimiter,
+	mockedProcessingTime time.Duration,
+) error {
 	router := http.NewServeMux()
 	router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := r.URL.Query().Get("requestID")
+		// requestID := r.URL.Query().Get("requestID")
 		userID := r.URL.Query().Get("userID")
-		log.Printf("Incoming request on this route: %+v, for this user: %+v, requestID: %+v\n", r.URL, userID, requestID)
+		// log.Printf("Incoming request on this route: %+v, for this user: %+v, requestID: %+v\n", r.URL, userID, requestID)
 
 		ok, err := rl.Request(userID)
 		if err != nil {
@@ -25,14 +30,14 @@ func sampleWebServer(rl ratelimiter.RateLimiter) error {
 		}
 
 		if !ok {
-			log.Printf("Request rejected on this route: %+v, for this user: %+v\n", r.URL, userID)
+			// log.Printf("Request rejectedCounter on this route: %+v, for this user: %+v\n", r.URL, userID)
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
 
 		defer rl.Release(userID)
-		log.Printf("Request accepted on this route: %+v, for this user: %+v\n", r.URL, userID)
-		time.Sleep(100 * time.Millisecond)
+		// log.Printf("Request accepted on this route: %+v, for this user: %+v\n", r.URL, userID)
+		time.Sleep(mockedProcessingTime)
 		w.Write([]byte("Successfully processed the message"))
 	}))
 
@@ -43,18 +48,29 @@ func sampleWebServer(rl ratelimiter.RateLimiter) error {
 	return err
 }
 
-func makeRequestFunc(resultChan *chan bool, requestID int, userID string) error {
+func makeRequestFunc(
+	wg *sync.WaitGroup,
+	succeededCounter *atomic.Int32,
+	rejectedCounter *atomic.Int32,
+	errorCounter *atomic.Int32,
+	requestID int,
+	userID string,
+) error {
+	defer wg.Done()
+	log.Printf("Sending request %d\n", requestID)
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d?userID=%s&requestID=%d", SAMPLE_WEB_SERVER_PORT, userID, requestID))
 	if err != nil {
+		log.Printf("Error: %+v\n", err)
+		errorCounter.Add(1)
 		return err
 	}
 
 	if resp.StatusCode == http.StatusOK {
-		log.Printf("Request %d was accepted\n", requestID+1)
-		*resultChan <- true
+		log.Printf("Request %d was accepted\n", requestID)
+		succeededCounter.Add(1)
 	} else {
-		log.Printf("Request %d was rejected\n", requestID+1)
-		*resultChan <- false
+		log.Printf("Request %d was rejectedCounter\n", requestID)
+		rejectedCounter.Add(1)
 	}
 
 	return nil
