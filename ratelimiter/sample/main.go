@@ -21,7 +21,8 @@ func main() {
 
 func index(rl ratelimiter.RateLimiter) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ok, err := rl.Request()
+		userID := r.URL.Query().Get("userID")
+		ok, err := rl.Request(userID)
 		if err != nil {
 			log.Printf("Error: %+v\n", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -29,14 +30,14 @@ func index(rl ratelimiter.RateLimiter) http.Handler {
 		}
 
 		if !ok {
-			log.Printf("Request rejected on this route: %+v\n", r.URL)
+			log.Printf("Request rejected on this route: %+v, for this user: %+v\n", r.URL, userID)
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
 
-		defer rl.Release()
-		log.Printf("Request accepted on this route: %+v\n", r.URL)
-		time.Sleep(5 * time.Second)
+		defer rl.Release(userID)
+		log.Printf("Request accepted on this route: %+v, for this user: %+v\n", r.URL, userID)
+		time.Sleep(500 * time.Millisecond)
 		w.Write([]byte("Successfully processed the message"))
 	})
 }

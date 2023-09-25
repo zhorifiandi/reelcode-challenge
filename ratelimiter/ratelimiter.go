@@ -1,6 +1,6 @@
 package ratelimiter
 
 type RateLimiter interface {
-	Request() (bool, error)
-	Release()
+	Request(key string) (bool, error)
+	Release(key string) error
 }
